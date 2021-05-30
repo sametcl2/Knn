@@ -1,41 +1,49 @@
 from django.shortcuts import render
-from sklearn.metrics.classification import accuracy_score
 
+# Matrix işlemleri için Numpy, CSV dosyasından datayı okumak için Pandas import edildi
 import numpy as np  
 import pandas as pd
-from sklearn.neighbors import KNeighborsClassifier  # KNN algoritması import edildi
-from sklearn.metrics import confusion_matrix, accuracy_score, classification_report # Karmaşıklı Matrisi ve Doğruluk oranının
-from sklearn.model_selection import train_test_split                                # tespiti için gerekli kütüphaneler import edildi
+# Gaussian Naive Bayes algoritması import edildi
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KNeighborsClassifier
+# Karmaşıklık Matrisi ve Doğruluk oranının tespiti için gerekli kütüphaneler import edildi
+from sklearn.metrics import confusion_matrix, accuracy_score, classification_report 
+from sklearn.model_selection import train_test_split      
 
+# Data pandas ile okundu
+train_df = pd.read_csv(r"C:\Users\Samet\Desktop\Projects\Odev\OdevDjango\odev\program\data\heart.csv")
+# Kullanılmayacak kısımlar datadan çıkarıldı
+train_df = train_df.drop(['oldpeak'], axis=1).drop(['slp'], axis=1).drop(['caa'], axis=1)
+
+# X değişkenine datalar atandı, output kusmı çıkarıldı
+x = train_df.drop(['output'], axis=1)
+# Y değişkenine datanın sonuç kısmı atanadı
+y = train_df[['output']]
+
+# Data %20 test %80 train olarak bölündü
+x_train,x_test,y_train,y_test = train_test_split(x,y,test_size = 0.2,random_state = 42)
+
+# Standtard Scaler kullanılarak datalar 0 ve 1 arası bir değere dönüştürüldü
+sc = StandardScaler()
+x_train = sc.fit_transform(x_train)
+x_test = sc.transform(x_test)
+
+# KNN algoritması ile model eğitirldi
+knn = KNeighborsClassifier()
+model = knn.fit(x_train, y_train)
+
+# Eğitilmiş model ile tahmin yapıldı
+test_y_pred = model.predict(x_test);
+# Bu tahmine göre doğruluk yüzdesi, confusion matrix ve f-1 score, recall vb. hesaplandı
+tn, fp, fn, tp = confusion_matrix(y_test, test_y_pred).ravel()
+acc = "{:.2f}".format(accuracy_score(y_test, test_y_pred))
+report = classification_report(y_test, test_y_pred, output_dict=True)
+
+print(x_test)
 def index(request):
      return render(request, 'program/index.html')
 
-def hesapla(request): 
-     # Kullanılacak CSV dosyası okundu ve içindeki bazı datalar temizlendi. 
-     data = pd.read_csv(r"C:\Users\Samet\Desktop\Projects\Odev\OdevDjango\odev\program\data\heart.csv")
-     data.drop_duplicates(inplace=True)
-     data.reset_index(drop=True, inplace=True)
-     data = data.drop(['oldpeak'], axis=1).drop(['slp'], axis=1).drop(['caa'], axis=1)
-
-     X = data.drop(['output'], axis=1)
-     y = data[['output']]
-
-     # Data %20 test ve %80 train olarak ayrıldı
-     X_train,X_test,y_train,y_test = train_test_split(X,y,test_size = 0.2,random_state = 42)
-
-     # Knn algoritmasında komşu sayısı 8 olacak şekilde kullanıldı ve eğitildi
-     knn = KNeighborsClassifier(n_neighbors=8)
-     model = knn.fit(X_train, y_train)
-
-     # Eğitilmiş model ile tahmin yapıldı.
-     test_y_pred = model.predict(X_test);
-
-     # Bu tahmine göre doğruluk yüzdesi ve confusion matrix hesaplandı
-     tn, fp, fn, tp = confusion_matrix(y_test, test_y_pred).ravel()
-     acc = "{:.2f}".format(accuracy_score(y_test, test_y_pred))
-     
-     report = classification_report(y_test, test_y_pred, output_dict=True)
-
+def hesapla(request):      
      sifir = report.get('0')
      sifir_f1 = sifir.get('f1-score')
      bir = report.get('1')
@@ -53,19 +61,25 @@ def hesapla(request):
      EKG = float(request.POST.get('EKG'))
      maxx = float(request.POST.get('max'))  
 
-     # Bu datalar kullanılabilmesi için bir array'e atandı
+     # Bu dataların kullanılabilmesi için array'e atandı
      test_array = np.array([[yas, cinsiyet, chest_pain_type, blood_pressure, cholestoral, blood_sugar,
                              EKG, maxx, angina, thallium_result]])
+     # Giriş değerleriyle aynı olması için Standart Scaler ile 0 ile 1 arası değerlere sıkıştırdıldı
+     test_array_n = sc.transform(test_array)
 
      # Yukarıda eğitilmiş modele kullanıcının giridiği datalar verildi ve yeni bir tahmin alındı. 
-     y_pred = model.predict(test_array)     
+     y_pred = model.predict(test_array_n)     
 
-     # Bu sonuc Frontend kısmına gönderildi
+     # Bu sonuc frontend kısmına gönderildi
      if (y_pred == [0]):
           sonuc = "DÜŞÜK"
-          context = {'sonuc': sonuc, 'acc': acc, 'sifir': sifir, 'sifir_f1': sifir_f1, 'bir': bir, 'bir_f1': bir_f1, 'tn': tn, 'tp': tp, 'fn': fn, 'fp': fp}
+          context = {
+               'sonuc': sonuc, 'acc': acc, 'sifir': sifir, 'sifir_f1': sifir_f1, 'bir': bir, 'bir_f1': bir_f1, 'tn': tn, 'tp': tp, 'fn': fn, 'fp': fp
+          }
      elif (y_pred == [1]):
           sonuc = "YÜKSEK"
-          context = {'sonuc': sonuc, 'acc': acc, 'sifir': sifir, 'sifir_f1': sifir_f1, 'bir': bir, 'bir_f1': bir_f1, 'tn': tn, 'tp': tp, 'fn': fn, 'fp': fp}   
+          context = {
+               'sonuc': sonuc, 'acc': acc, 'sifir': sifir, 'sifir_f1': sifir_f1, 'bir': bir, 'bir_f1': bir_f1, 'tn': tn, 'tp': tp, 'fn': fn, 'fp': fp
+          }   
 
      return render(request, 'program/index.html', context)
